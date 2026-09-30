@@ -140,7 +140,7 @@ function buildParticles(){
 
 function setup(){
   const cnv = createCanvas(CW, CH);
-  cnv.parent('stage');
+  document.getElementById('stage').prepend(cnv.elt);
   pixelDensity(1);
   mouseX = CW / 2; mouseY = CH * 0.60;           // 默认风 0、潮适中
   noiseSeed(2026);
