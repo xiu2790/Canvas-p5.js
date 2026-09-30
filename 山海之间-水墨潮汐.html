@@ -27,7 +27,6 @@
 </head>
 <body>
 <div class="stage">
-  <canvas id="sketch"></canvas>
   <div class="hint">
     <span class="chip"><b>鼠标</b> 潮汐·风</span>
     <span class="chip"><b>1 / 2 / 3</b> 换墨色</span>
@@ -140,7 +139,8 @@ function buildParticles(){
 }
 
 function setup(){
-  createCanvas(CW, CH);
+  const cnv = createCanvas(CW, CH);
+  cnv.parent('stage');
   pixelDensity(1);
   mouseX = CW / 2; mouseY = CH * 0.60;           // 默认风 0、潮适中
   noiseSeed(2026);
