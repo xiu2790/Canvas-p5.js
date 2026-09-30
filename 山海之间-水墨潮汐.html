@@ -23,7 +23,6 @@
   .cap .title{font-family:'Noto Serif SC',serif;font-weight:700;font-size:15px;letter-spacing:.42em;color:var(--paper);margin-bottom:8px;}
   .cap .src{font-size:12px;line-height:1.8;color:var(--muted);letter-spacing:.06em;}
   .cap .src b{color:#cfd8e0;font-weight:400;}
-  .cap .guide{margin-top:10px;font-size:11px;color:#5f6e7c;letter-spacing:.14em;}
   @media (max-width:640px){ .hint .chip:nth-child(n+2){display:none;} }
 </style>
 </head>
@@ -40,7 +39,6 @@
 <div class="cap">
   <div class="title">山 海 之 间</div>
   <div class="src" id="srcInfo"></div>
-  <div class="guide">当前墨色方案由 <b>1 · 2 · 3</b> 键切换，此处同步说明配色出处</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
@@ -68,7 +66,7 @@ const PALETTES = [
   },
   {
     name: '霞光暮色',
-    src: '取自中国传统矿物颜料——朱砂 #B0413E、赭石 #D98E52、金 #E8C47A，晚霞烧山、暮海熔金',
+    src: '取自中国传统矿物颜料——朱砂、赭石、金，晚霞烧山、暮海熔金',
     bg: [22, 15, 12], fade: 40,
     mountain: [[52, 36, 28], [70, 50, 38], [94, 68, 50], [120, 88, 62]],
     sea:      [[118, 48, 40], [158, 72, 48], [196, 108, 64], [228, 152, 98]],
