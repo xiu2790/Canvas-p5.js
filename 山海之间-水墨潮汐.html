@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>山海之间 · 水墨潮汐</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 3l8 12 8-12h-3.2L12 10.5 7.2 3z' fill='%23b8c8d8'/%3E%3Cpath d='M4 15h16v2H4zM4 20h10v2H4z' fill='%237ba8c4'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Serif+SC:wght@500;700;900&family=Noto+Sans+SC:wght@300;400;500&display=swap">
+<style>
+  :root{
+    --ink:#0c1016; --paper:#e9e4da; --muted:#9aa8b6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{background:var(--ink);color:var(--paper);font-family:'Noto Sans SC','Microsoft YaHei',sans-serif;font-weight:300;min-height:100%;}
+  body{display:flex;flex-direction:column;align-items:center;padding:14px 16px 40px;}
+  .stage{width:100%;max-width:1280px;}
+  canvas{width:100% !important;height:auto !important;display:block;border-radius:2px;box-shadow:0 30px 80px -40px rgba(0,0,0,.9);}
+  .hint{position:absolute;right:18px;top:18px;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;pointer-events:none;}
+  .stage{position:relative;}
+  .chip{font-size:11px;letter-spacing:.12em;color:#cdd8e0;background:rgba(8,12,18,.55);border:1px solid rgba(255,255,255,.12);padding:4px 10px;border-radius:20px;backdrop-filter:blur(3px);}
+  .chip b{color:#fff;font-weight:500;}
+  .cap{margin-top:14px;max-width:760px;text-align:center;}
+  .cap .title{font-family:'Noto Serif SC',serif;font-weight:700;font-size:15px;letter-spacing:.42em;color:var(--paper);margin-bottom:8px;}
+  .cap .src{font-size:12px;line-height:1.8;color:var(--muted);letter-spacing:.06em;}
+  .cap .src b{color:#cfd8e0;font-weight:400;}
+  .cap .guide{margin-top:10px;font-size:11px;color:#5f6e7c;letter-spacing:.14em;}
+  @media (max-width:640px){ .hint .chip:nth-child(n+2){display:none;} }
+</style>
+</head>
+<body>
+<div class="stage">
+  <canvas id="sketch"></canvas>
+  <div class="hint">
+    <span class="chip"><b>鼠标</b> 潮汐·风</span>
+    <span class="chip"><b>1 / 2 / 3</b> 换墨色</span>
+    <span class="chip"><b>S</b> 存图</span>
+    <span class="chip"><b>P</b> 暂停</span>
+  </div>
+</div>
+<div class="cap">
+  <div class="title">山 海 之 间</div>
+  <div class="src" id="srcInfo"></div>
+  <div class="guide">当前墨色方案由 <b>1 · 2 · 3</b> 键切换，此处同步说明配色出处</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+<script>
+/* ============================================================
+   山海之间 · 水墨潮汐 —— p5.js 生成艺术海报
+   · 粒子流场系统（≈1100 粒子，Perlin 噪声驱动成层山脊/潮汐波带）
+   · 交互一：鼠标 X → 风（shear 倾斜整片流场）；鼠标 Y → 潮（波幅/流速）
+   · 交互二：按键 1/2/3 切换三套墨色方案；S 导出 PNG；P 暂停
+   · 主题排印：Noto Serif SC 大字标题「山海之间」+ 竖排「水墨潮汐」
+   ============================================================ */
+'use strict';
+
+const CW = 1600, CH = 1000;                 // 固定内部分辨率，导出更清晰
+
+/* —— 三套墨色方案（含配色出处） —— */
+const PALETTES = [
+  {
+    name: '青黛水墨',
+    src: '源自中国传统「青绿山水」与水墨——黛青染山、墨分五色、天水一色',
+    bg: [10, 13, 20], fade: 36,
+    mountain: [[40, 50, 70], [56, 68, 92], [74, 88, 116], [94, 110, 140]],
+    sea:      [[40, 72, 110], [52, 96, 138], [70, 128, 166], [98, 164, 192]],
+    highlight: [152, 206, 224], accent: [218, 228, 238], sub: [140, 158, 175], glow: [120, 170, 205]
+  },
+  {
+    name: '霞光暮色',
+    src: '取自中国传统矿物颜料——朱砂 #B0413E、赭石 #D98E52、金 #E8C47A，晚霞烧山、暮海熔金',
+    bg: [22, 15, 12], fade: 40,
+    mountain: [[52, 36, 28], [70, 50, 38], [94, 68, 50], [120, 88, 62]],
+    sea:      [[118, 48, 40], [158, 72, 48], [196, 108, 64], [228, 152, 98]],
+    highlight: [244, 198, 130], accent: [248, 214, 158], sub: [196, 150, 112], glow: [232, 150, 96]
+  },
+  {
+    name: '月夜银辉',
+    src: '取「墨分五色」之灰度秩序与「月白」之色，霜月照海、银练横波',
+    bg: [7, 11, 17], fade: 40,
+    mountain: [[38, 46, 58], [52, 62, 76], [68, 80, 96], [88, 100, 116]],
+    sea:      [[32, 52, 72], [48, 72, 96], [68, 98, 124], [98, 134, 160]],
+    highlight: [204, 220, 232], accent: [230, 238, 244], sub: [140, 156, 172], glow: [150, 180, 205]
+  }
+];
+
+/* —— 成层波带：上段为山脊（慢·紧），下段为海（快·阔） —— */
+const BANDS = [
+  { y: 0.08, amp: 0.020, spd: 18,  ph: 0.0 },
+  { y: 0.20, amp: 0.028, spd: 15,  ph: 1.2 },
+  { y: 0.32, amp: 0.036, spd: 12,  ph: 2.4 },
+  { y: 0.44, amp: 0.046, spd: 10,  ph: 3.3 },
+  { y: 0.55, amp: 0.058, spd: 9,   ph: 4.2 },
+  { y: 0.66, amp: 0.080, spd: 34,  ph: 0.6 },
+  { y: 0.76, amp: 0.088, spd: 40,  ph: 1.7 },
+  { y: 0.86, amp: 0.098, spd: 47,  ph: 2.8 },
+  { y: 0.95, amp: 0.105, spd: 54,  ph: 3.9 }
+];
+
+let palIdx = 0, particles = [], fontReady = false, paused = false, drawnOnce = false;
+const motionReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SRC_EL = document.getElementById('srcInfo');
+
+function colorFor(bi){
+  const p = PALETTES[palIdx];
+  if (bi < 5){ // 山
+    const i = Math.min(3, Math.round(bi * (p.mountain.length - 1) / 4));
+    return p.mountain[i];
+  } else {     // 海
+    const i = Math.min(3, Math.round((bi - 5) * (p.sea.length - 1) / 3));
+    return p.sea[i];
+  }
+}
+
+function ridgeShape(xx, b){
+  return 0.6 * Math.sin(xx * 0.006 + b.ph)
+       + 0.4 * noise(xx * 0.0032 + b.ph * 3, b.ph);
+}
+function waveY(b, bi, x, t, wind, tide){
+  // 静态山脊轮廓 + 呼吸微荡；粒子沿山脊横向流动，形成横排墨线
+  const shear = wind * (bi - 4) * 70;            // 风的横向剪切
+  const xx = x + shear;
+  const breathe = 0.06 * Math.sin(t * 0.4 + b.ph);
+  return b.y * CH + b.amp * CH * tide * (ridgeShape(xx, b) + breathe);
+}
+
+function buildParticles(){
+  particles = [];
+  const per = Math.max(50, Math.floor(CW / 13)); // 每带约 123 → 总 ≈1100
+  for (let bi = 0; bi < BANDS.length; bi++){
+    const b = BANDS[bi];
+    for (let i = 0; i < per; i++){
+      const x = Math.random() * CW;
+      particles.push({
+        bi, x,
+        px: x, py: 0,
+        dir: Math.random() < 0.5 ? 1 : -1,
+        ph: Math.random() * Math.PI * 2,
+        hl: Math.random() < 0.09
+      });
+    }
+  }
+}
+
+function setup(){
+  createCanvas(CW, CH);
+  pixelDensity(1);
+  mouseX = CW / 2; mouseY = CH * 0.60;           // 默认风 0、潮适中
+  noiseSeed(2026);
+  buildParticles();
+  // 初始化粒子纵坐标为其所在波带位置，避免首帧从顶部拉出竖线
+  for (const pt of particles){
+    pt.py = waveY(BANDS[pt.bi], pt.bi, pt.x, 0, 0, 1);
+  }
+  background(PALETTES[palIdx].bg[0], PALETTES[palIdx].bg[1], PALETTES[palIdx].bg[2]);
+  prewarm();
+  // 预加载中文字体
+  if (document.fonts && document.fonts.load){
+    Promise.all([
+      document.fonts.load('900 100px "Noto Serif SC"'),
+      document.fonts.load('500 30px "Noto Serif SC"')
+    ]).then(() => fontReady = true).catch(() => fontReady = true);
+  } else fontReady = true;
+  updateSrcInfo();
+}
+
+function draw(){
+  if (motionReduced){ if (!drawnOnce){ renderFrame(true); drawnOnce = true; } return; }
+  if (paused) return;
+  renderFrame(false);
+}
+
+function renderFrame(staticOnce){
+  const p = PALETTES[palIdx];
+  const wind = map(mouseX, 0, CW, -0.7, 0.7);          // 交互一：风
+  const tide = map(mouseY, 0, CH, 0.35, 1.6);           // 交互一：潮
+  const t = millis() / 1000;
+  const dt = staticOnce ? 0 : Math.min(deltaTime, 50) / 1000;
+
+  // 墨水拖影
+  noStroke(); fill(p.bg[0], p.bg[1], p.bg[2], p.fade); rect(0, 0, CW, CH);
+  drawGlow(p);
+
+  // 粒子流场
+  for (const pt of particles){
+    const b = BANDS[pt.bi];
+    let nx = pt.x + (b.spd * pt.dir * tide + wind * 40) * dt;
+    if (nx > CW + 24) nx -= CW + 48;
+    if (nx < -24)     nx += CW + 48;
+    const ny = waveY(b, pt.bi, nx, t, wind, tide);
+    const col = pt.hl ? p.highlight : colorFor(pt.bi);
+    const alpha = pt.hl ? (b.bi < 5 ? 120 : 150) : (b.bi < 5 ? 26 + b.bi * 8 : 58 + (b.bi - 5) * 9);
+    stroke(col[0], col[1], col[2], alpha);
+    strokeWeight(pt.hl ? 2.2 : (b.bi < 5 ? 1.1 : 1.6));
+    line(pt.px, pt.py, nx, ny);
+    // 水光星点：高光粒子叠加柔光小点
+    if (pt.hl){
+      noStroke();
+      fill(col[0], col[1], col[2], 60);
+      circle(nx, ny, 5);
+    }
+    pt.px = nx; pt.py = ny; pt.x = nx;
+  }
+
+  drawText(p, wind, tide, t);
+}
+
+// 开屏预累加若干帧墨迹，让层叠山脊/潮汐立即可见
+function prewarm(){
+  const p = PALETTES[palIdx];
+  for (let f = 0; f < 26; f++){
+    noStroke(); fill(p.bg[0], p.bg[1], p.bg[2], p.fade); rect(0, 0, CW, CH);
+    const tt = f * 0.03;
+    for (const pt of particles){
+      const b = BANDS[pt.bi];
+      let nx = pt.x + b.spd * pt.dir * 0.03;
+      if (nx > CW + 24) nx -= CW + 48;
+      if (nx < -24)     nx += CW + 48;
+      const ny = waveY(b, pt.bi, nx, tt, 0, 1);
+      const col = pt.hl ? p.highlight : colorFor(pt.bi);
+      const alpha = pt.hl ? (b.bi < 5 ? 120 : 150) : (b.bi < 5 ? 26 + b.bi * 8 : 58 + (b.bi - 5) * 9);
+      stroke(col[0], col[1], col[2], alpha);
+      strokeWeight(pt.hl ? 2.0 : (b.bi < 5 ? 1.2 : 1.7));
+      line(pt.px, pt.py, nx, ny);
+      if (pt.hl){
+        noStroke();
+        fill(col[0], col[1], col[2], 60);
+        circle(nx, ny, 5);
+      }
+      pt.px = nx; pt.py = ny; pt.x = nx;
+    }
+  }
+}
+
+function rgbaStr(c, a){
+  return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')';
+}
+function drawGlow(p){
+  const gx = CW * 0.80, gy = CH * 0.185, R = 95;
+  const ctx = drawingContext;
+  // 外层柔光：径向渐变，从月心向四周平滑衰减到透明
+  const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, R * 3.4);
+  glow.addColorStop(0.00, rgbaStr(p.glow, 0.55));
+  glow.addColorStop(0.32, rgbaStr(p.glow, 0.16));
+  glow.addColorStop(1.00, rgbaStr(p.glow, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(gx, gy, R * 3.4, 0, Math.PI * 2); ctx.fill();
+  // 月晕：核心亮、边缘渐隐
+  const halo = ctx.createRadialGradient(gx, gy, R * 0.15, gx, gy, R * 1.2);
+  halo.addColorStop(0.00, rgbaStr(p.accent, 0.95));
+  halo.addColorStop(0.50, rgbaStr(p.accent, 0.45));
+  halo.addColorStop(1.00, rgbaStr(p.accent, 0));
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(gx, gy, R, 0, Math.PI * 2); ctx.fill();
+  // 月轮核心
+  ctx.fillStyle = rgbaStr(p.accent, 0.9);
+  ctx.beginPath(); ctx.arc(gx, gy, R * 0.7, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawText(p, wind, tide, t){
+  const serif = 'Noto Serif SC';
+  const sans  = 'Noto Sans SC';
+
+  // —— 主题大字：山海之间（置于山海交界，字随潮微漾）——
+  const chars = ['山', '海', '之', '间'];
+  const size = 128, spacing = 26;
+  const totalW = chars.length * size + (chars.length - 1) * spacing;
+  const cx = CW / 2;
+  let cy = CH * 0.545 + Math.sin(t * 0.5) * 2 + tide * 4;
+
+  textFont(fontReady ? serif : 'serif');
+  textAlign(CENTER, CENTER);
+  textSize(size);
+
+  // 两侧细规则线
+  stroke(p.sub[0], p.sub[1], p.sub[2], 120); strokeWeight(1);
+  line(cx - totalW / 2 - 60, cy, cx - totalW / 2 - 14, cy);
+  line(cx + totalW / 2 + 14, cy, cx + totalW / 2 + 60, cy);
+
+  // 每字单独绘制，实现字距
+  let x = cx - totalW / 2 + size / 2;
+  fill(p.accent[0], p.accent[1], p.accent[2], 208);
+  for (const ch of chars){
+    // 轻微逐字错落，增强"排印"感
+    const lift = Math.sin(t * 0.8 + ch.charCodeAt(0)) * 3;
+    text(ch, x, cy + lift);
+    x += size + spacing;
+  }
+
+  // —— 副标：水墨潮汐 ——
+  textSize(24); fill(p.sub[0], p.sub[1], p.sub[2], 200);
+  text('水 墨 潮 汐', cx, cy + 96);
+
+  // —— 竖排：山 海 Ink-Wash Tides（右侧）——
+  push();
+  translate(CW - 66, CH * 0.52); rotate(-HALF_PI);
+  textAlign(LEFT, CENTER); textSize(15);
+  fill(p.sub[0], p.sub[1], p.sub[2], 180);
+  text('山 海 · INK-WASH TIDES · ' + p.name, 0, 0);
+  pop();
+
+  // —— 右上：画名 + 页脚诗 ——
+  push();
+  textAlign(LEFT, TOP); textSize(14); textFont(sans);
+  fill(p.sub[0], p.sub[1], p.sub[2], 150);
+  text('山 海 之 间 · 生 成 艺 术 海 报', 60, 54);
+  pop();
+
+  push();
+  textAlign(CENTER, CENTER); textSize(18); textFont(serif);
+  fill(p.accent[0], p.accent[1], p.accent[2], 120);
+  text('远山如黛 · 近水含烟', cx, CH - 66);
+  pop();
+
+  // 左下角：当前墨色 + 交互参数读数
+  push();
+  textAlign(LEFT, BOTTOM); textSize(13); textFont(sans);
+  fill(p.sub[0], p.sub[1], p.sub[2], 160);
+  text('墨色 ' + p.name + ' ｜ 风 ' + wind.toFixed(2) + ' ｜ 潮 ' + tide.toFixed(2), 60, CH - 44);
+  pop();
+}
+
+function keyPressed(){
+  if (key === '1'){ palIdx = 0; resetInk(); }
+  else if (key === '2'){ palIdx = 1; resetInk(); }
+  else if (key === '3'){ palIdx = 2; resetInk(); }
+  else if (key === 's' || key === 'S'){
+    saveCanvas('山海之间-水墨潮汐-' + PALETTES[palIdx].name, 'png');
+  }
+  else if (key === 'p' || key === 'P'){ paused = !paused; }
+}
+
+function resetInk(){
+  background(PALETTES[palIdx].bg[0], PALETTES[palIdx].bg[1], PALETTES[palIdx].bg[2]);
+  updateSrcInfo();
+}
+
+function updateSrcInfo(){
+  const p = PALETTES[palIdx];
+  SRC_EL.innerHTML = '墨色方案 <b>' + p.name + '</b> — ' + p.src;
+}
+</script>
+</body>
+</html>
